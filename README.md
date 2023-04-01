@@ -11,6 +11,5 @@ Based on TeamPGM's Pagermaid-Pyro openaichat script, and do some improvements.
 
 How to use?
 
-Put ai.py into your pagermaid plugins, and reload plugins via ,reload command in telegram.
-
-Type ,ai your-question to chat with ChatGPT.
+* Put ai.py into your pagermaid plugins, and reload plugins via ,reload command in telegram.
+* Type ,ai your-question to chat with ChatGPT.
