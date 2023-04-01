@@ -13,7 +13,6 @@ pip_install("openai", "==0.27.2")
 
 import openai
 
-
 async def get_chat_response(prompt: str) -> str:
     return openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
@@ -25,12 +24,9 @@ async def get_chat_response(prompt: str) -> str:
         top_p=1,
         frequency_penalty=0.0,
         presence_penalty=0.6,
-                    
     ).choices[0].message["content"]
 
-
 chat_bot_session = defaultdict(dict)
-chat_bot_lock = threading.Lock()                                
 
 def set_api_key(api_key: str) -> None:
     sqlite["openaichat_api_key"] = api_key
@@ -46,11 +42,11 @@ def del_api_key():
 
 
 def set_template(template: str) -> None:
-    sqlite["openaichat_template"] = template
+    sqlite["default_template"] = template
 
 
 def get_template() -> str:
-    return sqlite.get("openaichat_template", None)
+    return sqlite.get("default_template", None)
 
 
 def formatted_response(prompt: str, message: str) -> str:
@@ -63,7 +59,7 @@ def formatted_response(prompt: str, message: str) -> str:
         return default_template.format(prompt, message)
 
 
-default_template = ""
+default_template = "{0}\n====\n{1}"
 openai.api_key = get_api_key()
 chat_bot_help = "使用 OpenAI Chat 聊天\n" \
                 "基于 gpt-3.5-turbo 模型，与 ChatGPT 的效果有些许不同\n" \
@@ -84,7 +80,7 @@ chat_bot_help = "使用 OpenAI Chat 聊天\n" \
 async def chat_bot_func(message: Message):
     if not message.arguments:
         if message.reply_to_message:
-            message.arguments = message.reply_to_message
+            message.arguments = message.reply_to_message.text
         elif message.parameter:
             message.arguments = await message.edit(message.arguments)
         else:
@@ -127,18 +123,16 @@ async def chat_bot_func(message: Message):
         return await message.edit("已删除 API Key。")
     if not get_api_key():
         return await message.edit("请先通过参数 `set [api_key]` 设置 OpenAI API Key。")
-    with chat_bot_lock:
-        with contextlib.suppress(Exception):
-            message: Message = await message.edit(formatted_response(message.arguments, "正在思考……"))
-        try:
-            chat_thread = chat_bot_session.get(from_id, {}).get("chat_thread", "")
-            prompt = f"{chat_thread}\nHuman: {message.arguments}\nAI: "[-96:]  # 4096 - 150(max_tokens)
-            msg = await get_chat_response(prompt)
-            chat_bot_session[from_id]["chat_thread"] = prompt + msg
-        except Exception as e:
-            msg = f"可能是 API Key 过期或网络/输入错误，请重新设置。\n{repr(e)}"
-        if not msg:
-            msg = "无法获取到回复，可能是网络波动，请稍后再试。"
-        with contextlib.suppress(Exception):
-            await message.edit(formatted_response(message.arguments, msg))
-
+    with contextlib.suppress(Exception):
+        message: Message = await message.edit(formatted_response(message.arguments, "请稍等..."))
+    try:
+        chat_thread = chat_bot_session.get(from_id, {}).get("chat_thread", "")
+        prompt = f"{chat_thread}\nHuman: {message.arguments}\nAI: "[-96:]  # 4096 - 150(max_tokens)
+        msg = await get_chat_response(prompt)
+        chat_bot_session[from_id]["chat_thread"] = prompt + msg
+    except Exception as e:
+        msg = f"可能是 API Key 过期或网络/输入错误，请重新设置。\n{repr(e)}"
+    if not msg:
+        msg = "无法获取到回复，可能是网络波动，请稍后再试。"
+    with contextlib.suppress(Exception):
+        await message.edit(formatted_response(message.arguments, msg))
